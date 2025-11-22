@@ -128,7 +128,6 @@ const authenticate = (req, res, next) => {
 
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
-    // ... (注册逻辑不变) ...
     if (!username || !password) return res.status(400).json({ success: false, msg: "缺少参数" });
     
     let users = fs.existsSync(USERS_FILE) ? JSON.parse(fs.readFileSync(USERS_FILE)) : [];
@@ -229,22 +228,14 @@ app.post('/api/task', authenticate, async (req, res) => {
         // 1. 获取分享信息，包括文件ID列表（已排序）和标题
         const shareInfo = await service115.getShareInfo(cookie, urlInfo.code, pass);
 
-        // 2. 决定最终的任务名和目标目录 (自动归档逻辑)
+        // 2. 决定最终的任务名和目标目录
         let finalTaskName = taskName;
         let finalTargetCid = targetCid || "0";
         let finalTargetName = targetName || "根目录";
-
+        
+        // 【R1-修改】如果任务名称为空，则使用分享标题作为任务名称，不再自动创建文件夹。
         if (!finalTaskName || finalTaskName.trim() === "") {
             finalTaskName = shareInfo.shareTitle; 
-            try {
-                const newFolder = await service115.addFolder(cookie, finalTargetCid, finalTaskName);
-                if (newFolder.success) {
-                    finalTargetCid = newFolder.cid;
-                    finalTargetName = `${finalTargetName} > ${newFolder.name}`;
-                }
-            } catch (err) {
-                console.warn(`[AutoFolder] 创建文件夹失败 (${err.message})`);
-            }
         }
 
         // 3. 创建任务对象
@@ -271,13 +262,13 @@ app.post('/api/task', authenticate, async (req, res) => {
         tasksCache[userId].unshift(newTask);
         saveUserTasks(userId);
 
+        // 【R2-修改】创建后立即执行一次转存（即首次保存任务）
         processTask(userId, newTask, false);
 
         // 如果有 cron 表达式，加入调度器
         if (cronExpression && cronExpression.trim().length > 0) {
             startCronJob(userId, newTask);
-            newTask.status = 'scheduled';
-            saveUserTasks(userId);
+            // 状态应该在 processTask 中更新为 success/scheduled
         }
 
         res.json({ success: true, msg: "任务创建成功" });
@@ -387,6 +378,7 @@ async function processTask(userId, task, isCron = false) {
     const todayStr = getTodayDateStr();
 
     // --- 1. 每日成功锁定检查 ---
+    // 【R2-修改】后续 Cron 任务才检查，手动任务不检查
     if (isCron && task.status === 'scheduled' && task.lastSuccessDate === todayStr) {
         console.log(`[Cron Skip] 任务 ${task.id} (${task.taskName}) 今日已成功执行，跳过`);
         updateTaskStatus(userId, task, 'scheduled', `[${formatTime()}] 今日已成功转存，跳过本次执行`);
@@ -397,7 +389,6 @@ async function processTask(userId, task, isCron = false) {
     
     // --- 2. 检查分享内容更新 (通过哈希文件列表) ---
     try {
-        // 使用 service115.getShareInfo 获取已排序的文件ID列表
         const shareInfo = await service115.getShareInfo(cookie, task.shareCode, task.receiveCode);
         const fileIds = shareInfo.fileIds;
         
@@ -409,18 +400,18 @@ async function processTask(userId, task, isCron = false) {
 
         const currentShareHash = fileIds.join(',');
 
-        if (task.lastShareHash && task.lastShareHash === currentShareHash) {
-            // 【无更新跳过】内容没有变化，跳过转存
+        // 【R2-修改】如果是 Cron 任务，且内容无变化，则跳过转存
+        if (isCron && task.lastShareHash && task.lastShareHash === currentShareHash) {
             console.log(`[Skip] 任务 ${task.id} (${task.taskName}) 内容无更新，跳过转存`);
-            const finalStatus = isCron ? 'scheduled' : 'pending';
-            updateTaskStatus(userId, task, finalStatus, `[${formatTime()}] 内容无更新，跳过转存`);
+            updateTaskStatus(userId, task, 'scheduled', `[${formatTime()}] 内容无更新，跳过转存`);
             return; 
         }
-
-        // 内容已更新或首次运行，记录新哈希值
+        
+        // 首次运行或内容已更新，记录新哈希值（用于下次对比）
         task.lastShareHash = currentShareHash; 
         
         // --- 3. 执行转存 ---
+        // 注意：此处已移除自动创建文件夹的逻辑。转存将直接在 targetCid 下进行。
 
         const saveResult = await service115.saveFiles(cookie, task.targetCid, task.shareCode, task.receiveCode, fileIds);
 
