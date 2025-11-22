@@ -5,7 +5,7 @@ const https = require('https');
 class Service115 {
     constructor() {
         this.agent = new https.Agent({ keepAlive: true });
-        // 模拟微信小程序环境
+        // 模拟微信小程序环境，目前相对稳定
         this.headers = {
             "Host": "webapi.115.com",
             "Connection": "keep-alive",
@@ -60,7 +60,7 @@ class Service115 {
         }
     }
 
-    // 3. 新增：创建文件夹
+    // 3. 创建文件夹
     async addFolder(cookie, parentCid, folderName) {
         const postData = qs.stringify({
             pid: parentCid,
@@ -81,8 +81,8 @@ class Service115 {
         }
     }
 
-    // 4. 获取分享链接详情 (重要修改：返回 Title)
-    async getShareSnap(cookie, shareCode, receiveCode) {
+    // 4. 获取分享链接信息 (文件ID列表和标题)
+    async getShareInfo(cookie, shareCode, receiveCode) {
         try {
             const res = await axios.get("https://webapi.115.com/share/snap", {
                 headers: this._getHeaders(cookie),
@@ -95,10 +95,14 @@ class Service115 {
                 throw new Error(res.data.error || res.data.msg || "链接无效或提取码错误");
             }
             
-            // 返回更丰富的数据用于自动命名
+            // 【关键修改】获取文件ID列表并排序，用于 server.js 中的哈希对比
+            const fileIds = res.data.data.list
+                .map(item => item.cid || item.fid)
+                .sort(); 
+                
             return {
                 success: true,
-                list: res.data.data.list.map(item => item.cid || item.fid),
+                fileIds: fileIds,
                 shareTitle: res.data.data.share_title || (res.data.data.list[0] ? res.data.data.list[0].n : "未命名任务"),
                 count: res.data.data.count
             };
@@ -109,7 +113,7 @@ class Service115 {
 
     // 5. 转存文件
     async saveFiles(cookie, targetCid, shareCode, receiveCode, fileIds) {
-        if (!fileIds.length) throw new Error("无文件可转存");
+        if (!fileIds.length) return { success: true, count: 0 }; // 没有文件要转存也算成功
         
         const postData = qs.stringify({
             cid: targetCid,
@@ -123,10 +127,10 @@ class Service115 {
                 headers: this._getHeaders(cookie),
                 httpsAgent: this.agent
             });
-            if (res.data.state) return { success: true };
+            if (res.data.state) return { success: true, count: fileIds.length };
             return { success: false, msg: res.data.error || res.data.msg || "转存被拒绝" };
         } catch (e) {
-            throw new Error("转存API请求失败: " + e.message);
+            return { success: false, msg: "转存API请求失败: " + e.message };
         }
     }
 }
