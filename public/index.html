@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>115 auto-save bot </title>
+    <title>115 Task Master Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root { --primary: #3b82f6; --bg: #f3f4f6; --card: #fff; --text: #1f2937; }
@@ -32,7 +32,7 @@
         .task-item.running { border-left-color: #3b82f6; }
         .task-item.success { border-left-color: #10b981; }
         .task-item.error { border-left-color: #ef4444; }
-        .task-item.scheduled { border-left-color: #8b5cf6; }
+        .task-item.scheduled { border-left-color: #8b5cf6; } /* 定时任务颜色 */
 
         .task-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .task-link { font-size: 1.05rem; font-weight: 600; color: var(--primary); text-decoration: none; display: inline-block; margin-bottom: 4px; }
@@ -276,7 +276,7 @@
         const finalParts = vals.map(v => v === "" ? "*" : v);
         const cronStr = finalParts.join(" ");
         let desc = `Cron: ${cronStr}`;
-        if(cronStr === "* * * * *") desc = "⚠️ 每分钟执行";
+        if(cronStr === "* * * * *") desc = "⚠️ 每分钟执行 (不推荐)";
         
         document.getElementById(resultId).innerText = desc;
         document.getElementById(resultId).style.color = "#10b981";
@@ -307,7 +307,7 @@
             document.getElementById('taskName').value = '';
             document.getElementById('shareUrl').value = '';
             alert('✅ 任务创建成功'); loadTasks();
-        } else alert(res.msg);
+        } else alert("❌ 失败: " + res.msg);
     }
 
     async function loadTasks() {
@@ -317,7 +317,7 @@
             <div class="task-item ${t.status}">
                 <div class="task-header">
                     <div>
-                        <a href="${t.shareUrl || '#'}" target="_blank" class="task-link">${t.taskName || '未命名'} 🔗</a>
+                        <a href="${t.shareUrl || '#'}" target="_blank" class="task-link" title="上次成功: ${t.lastSuccessDate || '无'}">${t.taskName || '未命名'} 🔗</a>
                         <div class="task-meta">
                             <span>📂 ${t.targetName}</span>
                             <span>|</span>
@@ -339,7 +339,7 @@
         if(confirm('确定删除?')) { await request(`/task/${id}`, 'DELETE'); loadTasks(); }
     }
 
-    // --- 编辑功能 (新增) ---
+    // --- 编辑功能 ---
 
     function openEditModal(id) {
         const task = allTasks.find(t => t.id === id);
@@ -396,7 +396,8 @@
     async function openFolderPicker(editMode) {
         isEditMode = editMode;
         document.getElementById('folderModal').style.display = 'flex';
-        loadFolders("0");
+        // 确保从根目录开始加载，防止定位错乱
+        loadFolders("0"); 
     }
 
     async function loadFolders(cid) {
@@ -414,6 +415,8 @@
                 html += `<div style="padding:10px; border-bottom:1px solid #eee; cursor:pointer;" onclick="loadFolders('${f.cid}')">📁 ${f.name}</div>`;
             });
             listDiv.innerHTML = html || '<div style="padding:10px;">空文件夹</div>';
+        } else {
+            listDiv.innerHTML = '<div style="padding:10px; color:red;">加载失败</div>';
         }
     }
 
