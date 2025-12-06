@@ -320,8 +320,9 @@ app.put('/api/task/:id', authenticate, async (req, res) => {
             task.status = 'scheduled';
             startCronJob(userId, task);
         } else {
+            // 【修正】当定时器关闭时，状态为 pending，日志提示等待手动执行
             task.status = 'pending';
-            task.log = '定时已关闭，等待手动执行';
+            task.log = '▶️ 定时已关闭，等待手动执行';
         }
 
         saveUserTasks(userId);
@@ -346,6 +347,28 @@ app.delete('/api/task/:id', authenticate, (req, res) => {
         saveUserTasks(userId);
     }
     res.json({ success: true });
+});
+
+// 【新增接口】手动执行任务
+app.put('/api/task/:id/run', authenticate, (req, res) => {
+    const userId = req.user.id;
+    const taskId = parseInt(req.params.id);
+    
+    const userTasks = tasksCache[userId] || [];
+    const task = userTasks.find(t => t.id === taskId);
+    
+    if (!task) return res.status(404).json({ success: false, msg: "任务不存在" });
+    
+    // 手动执行时不进行 "当日成功锁定" 检查 (isCron=false)
+    // 强制执行时，应将任务状态切换为 running
+    updateTaskStatus(userId, task, 'running', `[${formatTime()}] 收到手动执行指令，开始运行...`);
+    
+    // 使用 setTimeout 确保 API 响应能快速返回，任务在后台异步执行
+    setTimeout(() => {
+        processTask(userId, task, false); 
+    }, 100); 
+
+    res.json({ success: true, msg: "任务已启动" });
 });
 
 // --- 内部功能函数 ---
@@ -389,6 +412,7 @@ async function processTask(userId, task, isCron = false) {
     
     // --- 2. 检查分享内容更新 (通过哈希文件列表) ---
     try {
+        // 注意：此处已移除自动创建文件夹的逻辑。转存将直接在 targetCid 下进行。
         const shareInfo = await service115.getShareInfo(cookie, task.shareCode, task.receiveCode);
         const fileIds = shareInfo.fileIds;
         
@@ -411,8 +435,6 @@ async function processTask(userId, task, isCron = false) {
         task.lastShareHash = currentShareHash; 
         
         // --- 3. 执行转存 ---
-        // 注意：此处已移除自动创建文件夹的逻辑。转存将直接在 targetCid 下进行。
-
         const saveResult = await service115.saveFiles(cookie, task.targetCid, task.shareCode, task.receiveCode, fileIds);
 
         // --- 4. 成功后更新状态和日期 ---
