@@ -26,6 +26,7 @@
         .btn-outline { background: transparent; color: var(--text); border: 1px solid #e5e7eb; }
         .btn-danger { background: #ef4444; color: white; border: none; }
         .btn-edit { background: #3b82f6; color: white; border: none; }
+        .btn-run { background: #10b981; color: white; border: none; } /* 新增运行按钮样式 */
         
         /* Task List */
         .task-item { background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ccc; }
@@ -83,10 +84,10 @@
             </div>
         </div>
 
-<div class="card">
+        <div class="card">
             <h3>➕ 新建智能任务</h3>
             <div style="font-size:0.85rem; color:#666; margin-bottom:12px; background:#f3f4f6; padding:8px; border-radius:6px;">
-                💡 <b>自动命名</b>：留空任务名称，系统将自动获取分享标题作为任务名。
+                💡 <b>自动命名</b>：留空任务名称，系统将自动获取分享标题作为任务名，**不会自动新建文件夹**。
             </div>
             
             <div class="row">
@@ -306,8 +307,26 @@
         if(res.success) {
             document.getElementById('taskName').value = '';
             document.getElementById('shareUrl').value = '';
-            alert('✅ 任务创建成功'); loadTasks();
+            alert('✅ 任务创建成功，已开始首次执行'); loadTasks();
         } else alert("❌ 失败: " + res.msg);
+    }
+    
+    // 【新增】手动执行任务函数
+    async function runTaskNow(id) {
+        const task = allTasks.find(t => t.id === id);
+        if(!task) return alert('任务不存在');
+        if(task.status === 'running') return alert('任务正在运行中，请稍候');
+        
+        if(confirm(`确定立即执行任务: ${task.taskName}?`)) {
+            // 新增一个 PUT 接口来触发 processTask
+            const res = await request(`/task/${id}/run`, 'PUT');
+            if(res.success) {
+                alert('✅ 任务已启动，请等待状态刷新');
+                loadTasks();
+            } else {
+                alert("❌ 启动失败: " + res.msg);
+            }
+        }
     }
 
     async function loadTasks() {
@@ -324,8 +343,9 @@
                             <span>⏱️ ${t.cronExpression ? t.cronExpression : '手动'}</span>
                         </div>
                     </div>
-                    <div>
-                        <button onclick="openEditModal(${t.id})" class="btn-edit" style="width:auto; padding:4px 10px; font-size:0.8rem; margin-right:5px;">编辑</button>
+                    <div style="display:flex; gap:5px;">
+                        ${t.status !== 'running' ? `<button onclick="runTaskNow(${t.id})" class="btn-run" style="width:auto; padding:4px 10px; font-size:0.8rem;">执行</button>` : ''}
+                        <button onclick="openEditModal(${t.id})" class="btn-edit" style="width:auto; padding:4px 10px; font-size:0.8rem;">编辑</button>
                         <button onclick="deleteTask(${t.id})" class="btn-danger" style="width:auto; padding:4px 10px; font-size:0.8rem;">删除</button>
                     </div>
                 </div>
