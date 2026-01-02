@@ -45,7 +45,7 @@ version: "3"
 services:
   app:
     image: yourname/115-task-master:latest
-    container_name:115-task-master
+    container_name: 115-task-master
     restart: always
     ports:
       - "3115:3000"
