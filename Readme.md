@@ -38,6 +38,9 @@
 推荐使用 Docker Compose 进行部署。
 
 ### 1. 将项目所有文件下载并存储到本地
+```bash
+git clone --depth 1 https://github.com/knowusf/115-bot.git
+```
 
 ### 2. 启动服务
 
