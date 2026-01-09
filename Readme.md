@@ -41,18 +41,23 @@
 ### 2. 新建 docker-compose.yml（放在项目根目录）
 
 ```yaml
-version: "3"
+version: '3'
+
 services:
   app:
-    image: yourname/115-task-master:latest
+    build: .
     container_name: 115-task-master
     restart: always
     ports:
       - "3115:3000"
     volumes:
+      # 强制一致性：宿主机 ./data 对应容器 /app/data
       - ./data:/app/data
     environment:
       - TZ=Asia/Shanghai
+      - NODE_ENV=production
+    # 确保容器有权写入挂载卷
+    user: "node"
 ```
 
 ### 2. 启动服务
