@@ -38,27 +38,6 @@
 推荐使用 Docker Compose 进行部署。
 
 ### 1. 将项目所有文件下载并存储到本地
-### 2. 新建 docker-compose.yml（放在项目根目录）
-
-```yaml
-version: '3'
-
-services:
-  app:
-    build: .
-    container_name: 115-task-master
-    restart: always
-    ports:
-      - "3115:3000"
-    volumes:
-      # 强制一致性：宿主机 ./data 对应容器 /app/data
-      - ./data:/app/data
-    environment:
-      - TZ=Asia/Shanghai
-      - NODE_ENV=production
-    # 确保容器有权写入挂载卷
-    user: "node"
-```
 
 ### 2. 启动服务
 
